@@ -273,6 +273,19 @@
   }
   .countdown-circle.show { opacity: 1; transform: scale(1); }
 
+  /* CAMERA FLIP BUTTON */
+  .btn-flip-camera {
+    position: absolute; top: 12px; right: 12px; z-index: 15;
+    width: 40px; height: 40px; border-radius: 50%;
+    background: #000000aa; backdrop-filter: blur(6px);
+    border: 1px solid #ffffff33; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem; transition: all 0.2s; opacity: 0; pointer-events: none;
+  }
+  .btn-flip-camera.visible { opacity: 1; pointer-events: all; }
+  .btn-flip-camera:hover { background: #000000cc; border-color: #ffffff66; transform: scale(1.1); }
+  .btn-flip-camera:active { transform: scale(0.95); }
+
   @media (max-width: 900px) {
     .main { grid-template-columns: 1fr; padding: 12px; }
     .gesture-legend { gap: 8px; }
@@ -305,6 +318,7 @@
       <div class="countdown-overlay">
         <div class="countdown-circle" id="countdownCircle">3</div>
       </div>
+      <button class="btn-flip-camera" id="btnFlipCamera" onclick="switchCamera()" title="Switch Camera">🔄</button>
     </div>
 
     <div class="gesture-legend">
@@ -424,6 +438,7 @@ let isScanning = false;
 let handsModel = null;
 let cameraStream = null;
 let rafId = null;
+let currentFacingMode = 'user';
 
 // Per-hand tracking
 // Key = hand-id (string), Value = { lastGesture, cooldownUntil, countdownStart, countdownGesture, bufferFrames[], gestureStartTime }
@@ -793,6 +808,27 @@ async function startScanning() {
   document.getElementById('btnStart').textContent = '✅ กำลังทำงาน';
   document.getElementById('btnStart').style.background = 'linear-gradient(135deg,#10b981,#059669)';
   document.getElementById('btnStart').style.boxShadow = '0 4px 20px #10b98140';
+  document.getElementById('btnFlipCamera').classList.add('visible');
+}
+
+async function switchCamera() {
+  if (!isScanning) return;
+  currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+
+  // Stop existing tracks
+  if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());
+
+  const videoEl = document.getElementById('inputVideo');
+  // Mirror only for front camera
+  videoEl.style.transform = currentFacingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
+  document.getElementById('outputCanvas').style.transform = currentFacingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
+
+  cameraStream = await navigator.mediaDevices.getUserMedia({
+    video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: currentFacingMode }
+  });
+  videoEl.srcObject = cameraStream;
+  await new Promise(resolve => { videoEl.onloadedmetadata = resolve; });
+  await videoEl.play();
 }
 
 function showSummary() {
