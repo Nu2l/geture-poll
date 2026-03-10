@@ -79,11 +79,16 @@ let gestureBuffer = []
 let currentStream = null
 let useFrontCamera = true
 let cameraInitialized = false
+let cameraObj = null
 
 function startCamera(){
 
 if(currentStream){
 currentStream.getTracks().forEach(track=>track.stop())
+}
+
+if(cameraObj){
+cameraObj.stop()
 }
 
 const constraints = {
@@ -96,6 +101,18 @@ return navigator.mediaDevices.getUserMedia(constraints).then(stream=>{
 currentStream = stream
 video.srcObject = stream
 cameraInitialized = true
+
+// Initialize MediaPipe Camera
+cameraObj = new Camera(video,{
+onFrame: async()=>{
+await hands.send({image:video})
+},
+width:720,
+height:540
+})
+
+cameraObj.start()
+
 return stream
 }).catch(err=>{
 console.error('Camera error:',err)
@@ -256,16 +273,6 @@ l[4].x-l[8].x,
 l[4].y-l[8].y
 )
 
-if(okDist < 0.04) return "ok"
-
-if(index && middle && ring && pinky)
-return "hand"
-
-return null
-
-}
-
-function updateUI(){
 
 document.getElementById("v1").innerText=votes.thumb
 document.getElementById("v2").innerText=votes.ok
