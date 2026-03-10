@@ -1,875 +1,289 @@
 <!DOCTYPE html>
-<html lang="th">
+<html>
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Gesture Poll Scanner</title>
+
+<meta charset="utf-8">
+
+<title>AI Gesture Voting FINAL</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700;800&family=Space+Grotesk:wght@400;600;700&display=swap');
 
-  :root {
-    --bg: #0a0a0f;
-    --surface: #13131a;
-    --surface2: #1c1c26;
-    --border: #2a2a3a;
-    --thumb-color: #f59e0b;
-    --ok-color: #10b981;
-    --hand-color: #3b82f6;
-    --text: #f0f0f5;
-    --text-muted: #6b7280;
-    --accent: #8b5cf6;
-  }
+body{
+background:#0f172a;
+color:white;
+font-family:sans-serif;
+text-align:center;
+}
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+canvas{
+width:720px;
+border-radius:14px;
+}
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Sarabun', sans-serif;
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
+.vote{
+font-size:26px;
+margin:8px;
+}
 
-  /* HEADER */
-  .header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px 24px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    position: sticky; top: 0; z-index: 100;
-    backdrop-filter: blur(12px);
-  }
-  .header-title {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 1.1rem; font-weight: 700;
-    background: linear-gradient(135deg, #8b5cf6, #3b82f6);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    letter-spacing: -0.02em;
-  }
-  .status-badge {
-    display: flex; align-items: center; gap: 8px;
-    font-size: 0.78rem; font-weight: 600; color: var(--text-muted);
-    background: var(--surface2); border: 1px solid var(--border);
-    border-radius: 999px; padding: 5px 14px;
-    transition: all 0.3s;
-  }
-  .status-dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    background: var(--text-muted);
-    transition: background 0.3s;
-  }
-  .status-badge.active .status-dot { background: #10b981; box-shadow: 0 0 6px #10b981; }
-  .status-badge.active { color: #10b981; border-color: #10b98155; }
+button{
+padding:10px 20px;
+margin:8px;
+font-size:16px;
+}
 
-  /* MAIN LAYOUT */
-  .main {
-    display: grid;
-    grid-template-columns: 1fr 340px;
-    gap: 20px;
-    padding: 20px 24px;
-    max-width: 1400px;
-    margin: 0 auto;
-  }
+#countdown{
+font-size:60px;
+color:#22c55e;
+}
 
-  /* CAMERA SECTION */
-  .camera-section { display: flex; flex-direction: column; gap: 14px; }
-
-  .camera-wrapper {
-    position: relative;
-    border-radius: 16px;
-    overflow: hidden;
-    border: 1px solid var(--border);
-    background: #000;
-    aspect-ratio: 16/9;
-    width: 100%;
-  }
-
-  #inputVideo {
-    position: absolute; inset: 0;
-    width: 100%; height: 100%;
-    object-fit: cover;
-    transform: scaleX(-1);
-    display: block;
-  }
-
-  #outputCanvas {
-    position: absolute; inset: 0;
-    width: 100%; height: 100%;
-    transform: scaleX(-1);
-  }
-
-  .camera-overlay {
-    position: absolute; inset: 0;
-    display: flex; align-items: center; justify-content: center;
-    flex-direction: column; gap: 12px;
-    background: var(--surface);
-    z-index: 10;
-    transition: opacity 0.5s;
-  }
-  .camera-overlay.hidden { opacity: 0; pointer-events: none; }
-  .camera-overlay-icon { font-size: 3rem; }
-  .camera-overlay-text { font-size: 1rem; color: var(--text-muted); }
-
-  /* GESTURE LEGEND */
-  .gesture-legend {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
-  }
-  .gesture-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 12px 14px;
-    display: flex; align-items: center; gap: 10px;
-    transition: border-color 0.2s, background 0.2s;
-  }
-  .gesture-card.active-thumb { border-color: var(--thumb-color); background: #f59e0b0d; }
-  .gesture-card.active-ok { border-color: var(--ok-color); background: #10b9810d; }
-  .gesture-card.active-hand { border-color: var(--hand-color); background: #3b82f60d; }
-  .gesture-emoji { font-size: 1.6rem; line-height: 1; }
-  .gesture-info { display: flex; flex-direction: column; gap: 1px; }
-  .gesture-label { font-size: 0.72rem; color: var(--text-muted); font-weight: 400; }
-  .gesture-name { font-size: 0.85rem; font-weight: 600; }
-
-  /* SIDEBAR */
-  .sidebar { display: flex; flex-direction: column; gap: 14px; }
-
-  /* CONTROLS */
-  .controls { display: flex; flex-direction: column; gap: 10px; }
-  .btn {
-    width: 100%; padding: 12px 20px;
-    border: none; border-radius: 10px; cursor: pointer;
-    font-family: 'Sarabun', sans-serif; font-size: 0.9rem; font-weight: 700;
-    letter-spacing: 0.02em; transition: all 0.2s; position: relative; overflow: hidden;
-  }
-  .btn:active { transform: scale(0.98); }
-  .btn-start {
-    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
-    color: #fff; box-shadow: 0 4px 20px #8b5cf640;
-  }
-  .btn-start:hover { box-shadow: 0 6px 28px #8b5cf660; transform: translateY(-1px); }
-  .btn-reset {
-    background: var(--surface2); color: var(--text-muted);
-    border: 1px solid var(--border);
-  }
-  .btn-reset:hover { border-color: #ef444470; color: #ef4444; }
-
-  /* RESULTS */
-  .results-panel {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px;
-  }
-  .panel-title {
-    font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.1em; color: var(--text-muted);
-    border-bottom: 1px solid var(--border); padding-bottom: 10px;
-    display: flex; justify-content: space-between; align-items: center;
-  }
-  .total-badge {
-    background: var(--surface2); border-radius: 999px;
-    padding: 2px 10px; font-size: 0.72rem; color: var(--accent);
-    font-weight: 700; border: 1px solid #8b5cf633;
-  }
-
-  .result-row { display: flex; flex-direction: column; gap: 6px; }
-  .result-header { display: flex; align-items: center; justify-content: space-between; }
-  .result-left { display: flex; align-items: center; gap: 8px; }
-  .result-emoji { font-size: 1.25rem; }
-  .result-text { font-size: 0.82rem; }
-  .result-name { font-weight: 600; }
-  .result-desc { font-size: 0.72rem; color: var(--text-muted); }
-  .result-count {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 1.3rem; font-weight: 700;
-  }
-  .count-thumb { color: var(--thumb-color); }
-  .count-ok { color: var(--ok-color); }
-  .count-hand { color: var(--hand-color); }
-
-  .result-bar-bg {
-    height: 6px; border-radius: 999px; background: var(--surface2); overflow: hidden;
-  }
-  .result-bar-fill {
-    height: 100%; border-radius: 999px;
-    transition: width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-    min-width: 4px;
-  }
-  .bar-thumb { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
-  .bar-ok   { background: linear-gradient(90deg, #10b981, #34d399); }
-  .bar-hand { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
-
-  /* HANDS TRACKER */
-  .hands-panel {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px;
-  }
-  .hand-row {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 8px 10px; border-radius: 8px; background: var(--surface2);
-    border: 1px solid var(--border); transition: all 0.3s;
-    animation: fadeIn 0.3s ease;
-  }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
-  .hand-id { font-family: 'Space Grotesk', sans-serif; font-size: 0.75rem; font-weight: 600; color: var(--accent); }
-  .hand-gesture { font-size: 1.1rem; }
-  .hand-state { font-size: 0.7rem; color: var(--text-muted); }
-
-  .cooldown-bar-bg {
-    width: 60px; height: 4px; border-radius: 999px;
-    background: var(--border); overflow: hidden;
-  }
-  .cooldown-bar-fill {
-    height: 100%; border-radius: 999px;
-    background: var(--accent);
-    transition: width 0.1s linear;
-  }
-  .no-hands { text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 8px; }
-
-  /* SUMMARY MODAL */
-  .modal-overlay {
-    position: fixed; inset: 0; background: #000000aa;
-    backdrop-filter: blur(8px); z-index: 200;
-    display: flex; align-items: center; justify-content: center;
-    opacity: 0; pointer-events: none; transition: opacity 0.3s;
-  }
-  .modal-overlay.show { opacity: 1; pointer-events: all; }
-  .modal {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 20px; padding: 28px; width: 380px;
-    transform: scale(0.9); transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
-  }
-  .modal-overlay.show .modal { transform: scale(1); }
-  .modal-title {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 1.2rem; font-weight: 700; margin-bottom: 18px;
-    background: linear-gradient(135deg, #8b5cf6, #3b82f6);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-  }
-  .modal-stat { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
-  .modal-stat:last-of-type { border-bottom: none; }
-  .modal-stat-left { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; }
-  .modal-stat-count { font-family: 'Space Grotesk', sans-serif; font-size: 1.5rem; font-weight: 700; }
-  .modal-pct { font-size: 0.72rem; color: var(--text-muted); }
-  .modal-actions { display: flex; gap: 10px; margin-top: 18px; }
-  .modal-btn { flex: 1; padding: 10px; border-radius: 8px; border: none; cursor: pointer; font-family: 'Sarabun', sans-serif; font-weight: 700; font-size: 0.85rem; }
-  .modal-btn-close { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
-  .modal-btn-reset { background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; }
-
-  /* COUNTDOWN OVERLAY on camera */
-  .countdown-overlay {
-    position: absolute; inset: 0;
-    display: flex; align-items: center; justify-content: center;
-    pointer-events: none; z-index: 20;
-  }
-  .countdown-circle {
-    width: 80px; height: 80px; border-radius: 50%;
-    background: #000000cc; backdrop-filter: blur(4px);
-    border: 2px solid var(--accent);
-    display: flex; align-items: center; justify-content: center;
-    font-family: 'Space Grotesk', sans-serif; font-size: 2.2rem; font-weight: 700;
-    color: #fff; opacity: 0; transform: scale(0.5);
-    transition: opacity 0.2s, transform 0.2s cubic-bezier(0.34,1.56,0.64,1);
-  }
-  .countdown-circle.show { opacity: 1; transform: scale(1); }
-
-  /* CAMERA FLIP BUTTON */
-  .btn-flip-camera {
-    position: absolute; top: 12px; right: 12px; z-index: 15;
-    width: 40px; height: 40px; border-radius: 50%;
-    background: #000000aa; backdrop-filter: blur(6px);
-    border: 1px solid #ffffff33; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 1.1rem; transition: all 0.2s; opacity: 0; pointer-events: none;
-  }
-  .btn-flip-camera.visible { opacity: 1; pointer-events: all; }
-  .btn-flip-camera:hover { background: #000000cc; border-color: #ffffff66; transform: scale(1.1); }
-  .btn-flip-camera:active { transform: scale(0.95); }
-
-  @media (max-width: 900px) {
-    .main { grid-template-columns: 1fr; padding: 12px; }
-    .gesture-legend { gap: 8px; }
-  }
 </style>
+
 </head>
+
 <body>
 
-<!-- HEADER -->
-<div class="header">
-  <div class="header-title">🤌 Gesture Poll Scanner</div>
-  <div class="status-badge" id="statusBadge">
-    <div class="status-dot" id="statusDot"></div>
-    <span id="statusText">กำลังโหลด...</span>
-  </div>
-</div>
+<h2>AI Gesture Voting (Event Stable)</h2>
 
-<!-- MAIN -->
-<div class="main">
+<div id="countdown"></div>
 
-  <!-- LEFT: CAMERA -->
-  <div class="camera-section">
-    <div class="camera-wrapper" id="cameraWrapper">
-      <video id="inputVideo" autoplay muted playsinline></video>
-      <canvas id="outputCanvas"></canvas>
-      <div class="camera-overlay" id="cameraOverlay">
-        <div class="camera-overlay-icon">🤳</div>
-        <div class="camera-overlay-text">กด "เริ่มสแกน" เพื่อเปิดกล้อง</div>
-      </div>
-      <div class="countdown-overlay">
-        <div class="countdown-circle" id="countdownCircle">3</div>
-      </div>
-      <button class="btn-flip-camera" id="btnFlipCamera" onclick="switchCamera()" title="Switch Camera">🔄</button>
-    </div>
+<video id="video" style="display:none"></video>
+<canvas id="canvas"></canvas>
 
-    <div class="gesture-legend">
-      <div class="gesture-card" id="gc-thumb">
-        <div class="gesture-emoji">👍</div>
-        <div class="gesture-info">
-          <div class="gesture-label">ใช้บ่อย</div>
-          <div class="gesture-name">ยกนิ้วโป้ง</div>
-        </div>
-      </div>
-      <div class="gesture-card" id="gc-ok">
-        <div class="gesture-emoji">👌</div>
-        <div class="gesture-info">
-          <div class="gesture-label">เคยลองใช้บ้าง</div>
-          <div class="gesture-name">สัญลักษณ์ OK</div>
-        </div>
-      </div>
-      <div class="gesture-card" id="gc-hand">
-        <div class="gesture-emoji">✋</div>
-        <div class="gesture-info">
-          <div class="gesture-label">ยังไม่เคยใช้</div>
-          <div class="gesture-name">ยกมือขึ้น</div>
-        </div>
-      </div>
-    </div>
-  </div>
+<br>
 
-  <!-- RIGHT: SIDEBAR -->
-  <div class="sidebar">
+<button onclick="startVote()">Start Vote</button>
+<button onclick="resetVote()">Reset</button>
+<button onclick="switchCamera()">Switch Camera</button>
 
-    <!-- CONTROLS -->
-    <div class="controls">
-      <button class="btn btn-start" id="btnStart" onclick="startScanning()">▶ เริ่มสแกน</button>
-      <button class="btn btn-reset" id="btnReset" onclick="showSummary()">📊 ดูสรุปผล / รีเซ็ต</button>
-    </div>
-
-    <!-- RESULTS -->
-    <div class="results-panel">
-      <div class="panel-title">
-        ผลโหวต
-        <span class="total-badge" id="totalBadge">รวม 0 คน</span>
-      </div>
-      <div class="result-row">
-        <div class="result-header">
-          <div class="result-left">
-            <div class="result-emoji">👍</div>
-            <div class="result-text">
-              <div class="result-name">ใช้บ่อย</div>
-              <div class="result-desc">Thumbs Up</div>
-            </div>
-          </div>
-          <div class="result-count count-thumb" id="countThumb">0</div>
-        </div>
-        <div class="result-bar-bg"><div class="result-bar-fill bar-thumb" id="barThumb" style="width:0%"></div></div>
-      </div>
-      <div class="result-row">
-        <div class="result-header">
-          <div class="result-left">
-            <div class="result-emoji">👌</div>
-            <div class="result-text">
-              <div class="result-name">เคยลองใช้บ้าง</div>
-              <div class="result-desc">OK Sign</div>
-            </div>
-          </div>
-          <div class="result-count count-ok" id="countOk">0</div>
-        </div>
-        <div class="result-bar-bg"><div class="result-bar-fill bar-ok" id="barOk" style="width:0%"></div></div>
-      </div>
-      <div class="result-row">
-        <div class="result-header">
-          <div class="result-left">
-            <div class="result-emoji">✋</div>
-            <div class="result-text">
-              <div class="result-name">ยังไม่เคยใช้</div>
-              <div class="result-desc">Open Hand</div>
-            </div>
-          </div>
-          <div class="result-count count-hand" id="countHand">0</div>
-        </div>
-        <div class="result-bar-bg"><div class="result-bar-fill bar-hand" id="barHand" style="width:0%"></div></div>
-      </div>
-    </div>
-
-    <!-- LIVE HANDS -->
-    <div class="hands-panel">
-      <div class="panel-title" style="border-bottom: none; padding-bottom:0;">
-        มือที่ตรวจพบ (Live)
-      </div>
-      <div id="handsContainer"><div class="no-hands">ยังไม่มีมือในเฟรม</div></div>
-    </div>
-
-  </div>
-</div>
-
-<!-- SUMMARY MODAL -->
-<div class="modal-overlay" id="summaryModal">
-  <div class="modal">
-    <div class="modal-title">📊 สรุปผลโหวต</div>
-    <div id="modalContent"></div>
-    <div class="modal-actions">
-      <button class="modal-btn modal-btn-close" onclick="closeModal()">ปิด</button>
-      <button class="modal-btn modal-btn-reset" onclick="resetAll()">🔄 รีเซ็ตข้อมูล</button>
-    </div>
-  </div>
-</div>
-
-<!-- MEDIAPIPE (hands + drawing only — no camera_utils) -->
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<div class="vote">👍 ใช้บ่อย: <span id="v1">0</span></div>
+<div class="vote">👌 เคยใช้: <span id="v2">0</span></div>
+<div class="vote">✋ ยังไม่เคยใช้: <span id="v3">0</span></div>
 
 <script>
-// ============================================================
-// STATE
-// ============================================================
-const counts = { thumb: 0, ok: 0, hand: 0 };
-let isScanning = false;
-let handsModel = null;
-let cameraStream = null;
-let rafId = null;
-let currentFacingMode = 'user';
 
-// Per-hand tracking
-// Key = hand-id (string), Value = { lastGesture, cooldownUntil, countdownStart, countdownGesture, bufferFrames[], gestureStartTime }
-const handStates = {};
-const COOLDOWN_MS = 3000;
-const COUNTDOWN_MS = 2000; // hold for 2s to confirm
-const BUFFER_SIZE = 6;
-const MATCH_THRESHOLD = 5; // out of 6
+const video = document.getElementById("video")
+const canvas = document.getElementById("canvas")
+const ctx = canvas.getContext("2d")
 
-// Visual: map centroid to ID
-const centroidIds = []; // [{cx, cy, id}]
-let nextHandId = 1;
+let votes = {thumb:0, ok:0, hand:0}
 
-// Audio
-const AudioCtx = window.AudioContext || window.webkitAudioContext;
-let audioCtx = null;
-function ensureAudio() { if (!audioCtx) audioCtx = new AudioCtx(); }
-function beep(freq = 880, dur = 0.08, vol = 0.3) {
-  ensureAudio();
-  const o = audioCtx.createOscillator();
-  const g = audioCtx.createGain();
-  o.connect(g); g.connect(audioCtx.destination);
-  o.frequency.value = freq; g.gain.value = vol;
-  o.start(); o.stop(audioCtx.currentTime + dur);
-}
-function beepSuccess() { beep(660,0.07); setTimeout(()=>beep(880,0.12),80); setTimeout(()=>beep(1100,0.15),180); }
-function beepTick() { beep(440, 0.05, 0.15); }
+let voted = false
+let votingActive = false
 
-// ============================================================
-// GESTURE RECOGNITION
-// ============================================================
-function dist(a, b) {
-  return Math.hypot(a.x - b.x, a.y - b.y);
+let gestureBuffer = []
+
+let currentStream = null
+let useFrontCamera = true
+let cameraInitialized = false
+
+function startCamera(){
+
+if(currentStream){
+currentStream.getTracks().forEach(track=>track.stop())
 }
 
-function classifyGesture(landmarks) {
-  // Landmarks: 21 points, normalized
-  const wrist = landmarks[0];
-  const thumbTip = landmarks[4];
-  const indexTip = landmarks[8];
-  const middleTip = landmarks[12];
-  const ringTip = landmarks[16];
-  const pinkyTip = landmarks[20];
-
-  const thumbMcp = landmarks[2];
-  const indexMcp = landmarks[5];
-  const indexPip = landmarks[6];
-  const middleMcp = landmarks[9];
-  const ringMcp = landmarks[13];
-  const pinkyMcp = landmarks[17];
-  const middlePip = landmarks[10];
-  const ringPip = landmarks[14];
-  const pinkyPip = landmarks[18];
-
-  // Helper: is finger extended?
-  function fingerUp(tip, pip, mcp) {
-    return tip.y < pip.y && pip.y < mcp.y;
-  }
-
-  const indexUp = fingerUp(indexTip, indexPip, indexMcp);
-  const middleUp = fingerUp(middleTip, middlePip, middleMcp);
-  const ringUp = fingerUp(ringTip, ringPip, ringMcp);
-  const pinkyUp = fingerUp(pinkyTip, pinkyPip, pinkyMcp);
-
-  // Thumb: tip significantly above mcp horizontally
-  const thumbUp = thumbTip.y < thumbMcp.y - 0.04;
-
-  // ✋ OPEN HAND: all 4 fingers up
-  if (indexUp && middleUp && ringUp && pinkyUp) return 'hand';
-
-  // 👌 OK: thumb tip close to index tip, other fingers curled
-  const okDist = dist(thumbTip, indexTip);
-  if (okDist < 0.07 && !middleUp && !ringUp && !pinkyUp) return 'ok';
-  // relaxed OK
-  if (okDist < 0.10 && middleUp && !ringUp && !pinkyUp) return 'ok';
-
-  // 👍 THUMB UP: only thumb extended, others curled
-  const thumbHeight = wrist.y - thumbTip.y;
-  const indexCurled = !indexUp;
-  const middleCurled = !middleUp;
-  if (thumbHeight > 0.12 && indexCurled && middleCurled && !ringUp && !pinkyUp) return 'thumb';
-
-  return null;
+const constraints = {
+video:{
+facingMode: useFrontCamera ? 'user' : 'environment'
+}
 }
 
-// ============================================================
-// HAND TRACKING ID
-// ============================================================
-function getOrCreateHandId(cx, cy) {
-  let best = null, bestDist = 0.12;
-  for (const c of centroidIds) {
-    const d = Math.hypot(c.cx - cx, c.cy - cy);
-    if (d < bestDist) { bestDist = d; best = c; }
-  }
-  if (best) { best.cx = cx; best.cy = cy; best.seen = Date.now(); return best.id; }
-  const id = 'H' + nextHandId++;
-  centroidIds.push({ cx, cy, id, seen: Date.now() });
-  return id;
-}
-function cleanOldIds() {
-  const now = Date.now();
-  for (let i = centroidIds.length - 1; i >= 0; i--) {
-    if (now - centroidIds[i].seen > 2000) centroidIds.splice(i, 1);
-  }
+return navigator.mediaDevices.getUserMedia(constraints).then(stream=>{
+currentStream = stream
+video.srcObject = stream
+cameraInitialized = true
+return stream
+}).catch(err=>{
+console.error('Camera error:',err)
+alert('Camera access denied. Please allow camera access to use this app.')
+throw err
+})
+
 }
 
-// ============================================================
-// PROCESS RESULTS
-// ============================================================
-const GESTURE_COLORS = { thumb: '#f59e0b', ok: '#10b981', hand: '#3b82f6' };
-const GESTURE_EMOJI = { thumb: '👍', ok: '👌', hand: '✋', null: '—' };
-
-function onResults(results) {
-  const canvas = document.getElementById('outputCanvas');
-  const video = document.getElementById('inputVideo');
-  canvas.width = video.videoWidth || 640;
-  canvas.height = video.videoHeight || 480;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  cleanOldIds();
-
-  const activeHandIds = new Set();
-  const now = Date.now();
-
-  if (!isScanning || !results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
-    updateHandsUI({});
-    return;
-  }
-
-  const liveHandInfo = {};
-
-  results.multiHandLandmarks.forEach((landmarks, i) => {
-    const wrist = landmarks[0];
-    const cx = wrist.x, cy = wrist.y;
-    const handId = getOrCreateHandId(cx, cy);
-    activeHandIds.add(handId);
-
-    if (!handStates[handId]) {
-      handStates[handId] = {
-        buffer: [],
-        countdownStart: null,
-        countdownGesture: null,
-        cooldownUntil: 0
-      };
-    }
-
-    const state = handStates[handId];
-    const gesture = classifyGesture(landmarks);
-
-    // Buffer smoothing
-    state.buffer.push(gesture);
-    if (state.buffer.length > BUFFER_SIZE) state.buffer.shift();
-
-    // Majority vote
-    function majorityGesture(buf) {
-      const freq = {};
-      for (const g of buf) { if (g) freq[g] = (freq[g] || 0) + 1; }
-      let best = null, bestN = MATCH_THRESHOLD - 1;
-      for (const [g, n] of Object.entries(freq)) { if (n > bestN) { bestN = n; best = g; } }
-      return best;
-    }
-    const smoothedGesture = majorityGesture(state.buffer);
-
-    // Countdown logic
-    const inCooldown = now < state.cooldownUntil;
-    let countdownPct = 0;
-
-    if (!inCooldown && smoothedGesture) {
-      if (state.countdownGesture !== smoothedGesture) {
-        state.countdownStart = now;
-        state.countdownGesture = smoothedGesture;
-      }
-      const elapsed = now - state.countdownStart;
-      countdownPct = Math.min(elapsed / COUNTDOWN_MS, 1);
-
-      if (elapsed >= COUNTDOWN_MS) {
-        // REGISTER!
-        counts[smoothedGesture]++;
-        state.cooldownUntil = now + COOLDOWN_MS;
-        state.countdownStart = null;
-        state.countdownGesture = null;
-        state.buffer = [];
-        beepSuccess();
-        updateResults();
-        highlightGestureCard(smoothedGesture);
-        debugLog(`Vote registered: ${GESTURE_EMOJI[smoothedGesture]} ${smoothedGesture} by ${handId} (total: ${counts[smoothedGesture]})`, 'ok');
-      } else {
-        // Tick beep every second
-        const secElapsed = Math.floor(elapsed / 700);
-        if (!state._lastBeepSec || state._lastBeepSec !== secElapsed) {
-          state._lastBeepSec = secElapsed;
-          if (secElapsed > 0) beepTick();
-        }
-      }
-    } else if (!smoothedGesture) {
-      state.countdownStart = null;
-      state.countdownGesture = null;
-    }
-
-    liveHandInfo[handId] = {
-      gesture: smoothedGesture,
-      inCooldown,
-      cooldownPct: inCooldown ? 1 - (state.cooldownUntil - now) / COOLDOWN_MS : 0,
-      countdownPct
-    };
-
-    // Draw skeleton
-    const color = smoothedGesture ? GESTURE_COLORS[smoothedGesture] : '#ffffff44';
-    drawConnectors(ctx, landmarks, HAND_CONNECTIONS, { color, lineWidth: 2 });
-    drawLandmarks(ctx, landmarks, { color, fillColor: smoothedGesture ? color : '#ffffff22', lineWidth: 1, radius: 4 });
-
-    // Draw countdown arc above wrist
-    if (countdownPct > 0 && !inCooldown) {
-      const px = cx * canvas.width;
-      const py = cy * canvas.height;
-      ctx.save();
-      ctx.strokeStyle = GESTURE_COLORS[smoothedGesture] || '#fff';
-      ctx.lineWidth = 4;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.arc(px, py, 28, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * countdownPct);
-      ctx.stroke();
-      // Number
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 16px Space Grotesk, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      const secLeft = Math.ceil((COUNTDOWN_MS - (now - state.countdownStart)) / 1000);
-      ctx.fillText(secLeft > 0 ? secLeft : '✓', px, py);
-      ctx.restore();
-    }
-
-    // Cooldown indicator
-    if (inCooldown) {
-      const px = cx * canvas.width;
-      const py = cy * canvas.height;
-      ctx.save();
-      ctx.strokeStyle = '#ffffff33';
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(px, py, 28, 0, 2 * Math.PI);
-      ctx.stroke();
-      ctx.fillStyle = '#ffffff88';
-      ctx.font = 'bold 12px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('⏳', px, py);
-      ctx.restore();
-    }
-
-    // Hand label
-    const px = cx * canvas.width;
-    const py = cy * canvas.height - 40;
-    ctx.save();
-    ctx.fillStyle = '#000000bb';
-    ctx.roundRect && ctx.roundRect(px - 22, py - 12, 44, 22, 6);
-    ctx.fill();
-    ctx.fillStyle = color;
-    ctx.font = 'bold 11px Space Grotesk, monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(handId + ' ' + (GESTURE_EMOJI[smoothedGesture] || ''), px, py);
-    ctx.restore();
-  });
-
-  updateHandsUI(liveHandInfo);
+function switchCamera(){
+useFrontCamera = !useFrontCamera
+startCamera()
 }
 
-// ============================================================
-// UI UPDATES
-// ============================================================
-function updateResults() {
-  const total = counts.thumb + counts.ok + counts.hand;
-  document.getElementById('countThumb').textContent = counts.thumb;
-  document.getElementById('countOk').textContent = counts.ok;
-  document.getElementById('countHand').textContent = counts.hand;
-  document.getElementById('totalBadge').textContent = `รวม ${total} คน`;
-  const max = Math.max(counts.thumb, counts.ok, counts.hand, 1);
-  document.getElementById('barThumb').style.width = (counts.thumb / max * 100) + '%';
-  document.getElementById('barOk').style.width = (counts.ok / max * 100) + '%';
-  document.getElementById('barHand').style.width = (counts.hand / max * 100) + '%';
+async function startVote(){
+
+if(!cameraInitialized){
+try{
+await startCamera()
+}catch(err){
+return
+}
 }
 
-function updateHandsUI(info) {
-  const container = document.getElementById('handsContainer');
-  const keys = Object.keys(info);
-  if (keys.length === 0) {
-    container.innerHTML = '<div class="no-hands">ยังไม่มีมือในเฟรม</div>';
-    return;
-  }
-  container.innerHTML = keys.map(id => {
-    const d = info[id];
-    const g = d.gesture;
-    const emoji = g ? GESTURE_EMOJI[g] : '—';
-    const stateText = d.inCooldown ? 'Cooldown' : (g ? 'กำลังนับ...' : 'รอท่าทาง');
-    const barPct = d.inCooldown ? d.cooldownPct * 100 : d.countdownPct * 100;
-    const barColor = d.inCooldown ? '#6b728066' : (g ? GESTURE_COLORS[g] : '#6b7280');
-    return `<div class="hand-row">
-      <div>
-        <div class="hand-id">${id}</div>
-        <div class="hand-state">${stateText}</div>
-      </div>
-      <div style="font-size:1.3rem">${emoji}</div>
-      <div class="cooldown-bar-bg">
-        <div class="cooldown-bar-fill" style="width:${barPct}%;background:${barColor}"></div>
-      </div>
-    </div>`;
-  }).join('');
+voted=false
+gestureBuffer=[]
+
+let c = 3
+
+const cd = document.getElementById("countdown")
+
+cd.innerText=c
+
+const timer = setInterval(()=>{
+
+c--
+
+if(c==0){
+
+cd.innerText="GO"
+votingActive=true
+
+clearInterval(timer)
+
+setTimeout(()=>cd.innerText="",1000)
+
+}else{
+
+cd.innerText=c
+
 }
 
-let highlightTimeout = {};
-function highlightGestureCard(gesture) {
-  const map = { thumb: 'gc-thumb', ok: 'gc-ok', hand: 'gc-hand' };
-  const el = document.getElementById(map[gesture]);
-  if (!el) return;
-  const cls = { thumb: 'active-thumb', ok: 'active-ok', hand: 'active-hand' };
-  el.classList.add(cls[gesture]);
-  clearTimeout(highlightTimeout[gesture]);
-  highlightTimeout[gesture] = setTimeout(() => el.classList.remove(cls[gesture]), 1500);
+},1000)
+
 }
 
-// ============================================================
-// START / RESET
-// ============================================================
-async function startScanning() {
-  if (isScanning) return;
+function resetVote(){
 
-  document.getElementById('btnStart').textContent = '⏳ กำลังโหลด...';
-  document.getElementById('btnStart').disabled = true;
+votes={thumb:0,ok:0,hand:0}
 
-  // --- Native getUserMedia ---
-  cameraStream = await navigator.mediaDevices.getUserMedia({
-    video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
-  });
+voted=false
+votingActive=false
+gestureBuffer=[]
 
-  const videoEl = document.getElementById('inputVideo');
-  videoEl.srcObject = cameraStream;
-  await new Promise(resolve => { videoEl.onloadedmetadata = resolve; });
-  await videoEl.play();
+updateUI()
 
-  // --- MediaPipe Hands ---
-  handsModel = new Hands({
-    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-  });
-  handsModel.setOptions({
-    maxNumHands: 6,
-    modelComplexity: 1,
-    minDetectionConfidence: 0.6,
-    minTrackingConfidence: 0.55
-  });
-  handsModel.onResults(onResults);
-
-  // --- RAF loop feeds frames to MediaPipe ---
-  async function processFrame() {
-    if (!isScanning) return;
-    await handsModel.send({ image: videoEl });
-    rafId = requestAnimationFrame(processFrame);
-  }
-  rafId = requestAnimationFrame(processFrame);
-
-  isScanning = true;
-  document.getElementById('cameraOverlay').classList.add('hidden');
-  document.getElementById('statusBadge').classList.add('active');
-  document.getElementById('statusDot').style.background = '#10b981';
-  document.getElementById('statusText').textContent = 'กำลังสแกน';
-  document.getElementById('btnStart').textContent = '✅ กำลังทำงาน';
-  document.getElementById('btnStart').style.background = 'linear-gradient(135deg,#10b981,#059669)';
-  document.getElementById('btnStart').style.boxShadow = '0 4px 20px #10b98140';
-  document.getElementById('btnFlipCamera').classList.add('visible');
 }
 
-async function switchCamera() {
-  if (!isScanning) return;
-  currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+const hands = new Hands({
+locateFile:(file)=>{
+return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+}
+})
 
-  // Stop existing tracks
-  if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());
+hands.setOptions({
 
-  const videoEl = document.getElementById('inputVideo');
-  // Mirror only for front camera
-  videoEl.style.transform = currentFacingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
-  document.getElementById('outputCanvas').style.transform = currentFacingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
+maxNumHands:6,
+modelComplexity:1,
+minDetectionConfidence:0.8,
+minTrackingConfidence:0.8
 
-  cameraStream = await navigator.mediaDevices.getUserMedia({
-    video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: currentFacingMode }
-  });
-  videoEl.srcObject = cameraStream;
-  await new Promise(resolve => { videoEl.onloadedmetadata = resolve; });
-  await videoEl.play();
+})
+
+hands.onResults(results=>{
+
+canvas.width = video.videoWidth
+canvas.height = video.videoHeight
+
+ctx.drawImage(video,0,0)
+
+if(!results.multiHandLandmarks) return
+
+let selectedHand=null
+let bestDist=999
+
+const cx=0.5
+const cy=0.5
+
+results.multiHandLandmarks.forEach(hand=>{
+
+const wrist=hand[0]
+
+const dist=Math.hypot(
+wrist.x-cx,
+wrist.y-cy
+)
+
+if(dist<bestDist){
+
+bestDist=dist
+selectedHand=hand
+
 }
 
-function showSummary() {
-  const total = counts.thumb + counts.ok + counts.hand;
-  const pct = (n) => total > 0 ? ((n / total) * 100).toFixed(1) + '%' : '0%';
-  document.getElementById('modalContent').innerHTML = `
-    <div class="modal-stat">
-      <div class="modal-stat-left"><span style="font-size:1.4rem">👍</span><div><div style="font-weight:600">ใช้บ่อย</div><div class="modal-pct">${pct(counts.thumb)} ของทั้งหมด</div></div></div>
-      <div class="modal-stat-count" style="color:#f59e0b">${counts.thumb}</div>
-    </div>
-    <div class="modal-stat">
-      <div class="modal-stat-left"><span style="font-size:1.4rem">👌</span><div><div style="font-weight:600">เคยลองใช้บ้าง</div><div class="modal-pct">${pct(counts.ok)} ของทั้งหมด</div></div></div>
-      <div class="modal-stat-count" style="color:#10b981">${counts.ok}</div>
-    </div>
-    <div class="modal-stat">
-      <div class="modal-stat-left"><span style="font-size:1.4rem">✋</span><div><div style="font-weight:600">ยังไม่เคยใช้</div><div class="modal-pct">${pct(counts.hand)} ของทั้งหมด</div></div></div>
-      <div class="modal-stat-count" style="color:#3b82f6">${counts.hand}</div>
-    </div>
-    <div style="text-align:center;margin-top:14px;padding:10px;background:var(--surface2);border-radius:8px;font-size:0.85rem;color:var(--text-muted)">
-      📊 ผู้เข้าร่วมทั้งหมด <strong style="color:var(--text)">${total} คน</strong>
-    </div>
-  `;
-  document.getElementById('summaryModal').classList.add('show');
-}
-function closeModal() { document.getElementById('summaryModal').classList.remove('show'); }
-function resetAll() {
-  counts.thumb = 0; counts.ok = 0; counts.hand = 0;
-  for (const k in handStates) delete handStates[k];
-  centroidIds.length = 0; nextHandId = 1;
-  updateResults();
-  closeModal();
+})
+
+if(!selectedHand) return
+
+drawConnectors(ctx,selectedHand,HAND_CONNECTIONS)
+drawLandmarks(ctx,selectedHand)
+
+const gesture = detectGesture(selectedHand)
+
+if(!gesture) return
+
+gestureBuffer.push(gesture)
+
+if(gestureBuffer.length>12)
+gestureBuffer.shift()
+
+const stable = gestureBuffer.every(g=>g===gesture)
+
+if(stable && votingActive && !voted){
+
+votes[gesture]++
+
+voted=true
+
+updateUI()
+
 }
 
-// Close modal on outside click
-document.getElementById('summaryModal').addEventListener('click', function(e) {
-  if (e.target === this) closeModal();
-});
+})
 
-// Init
-updateResults();
-document.getElementById('statusText').textContent = 'พร้อมใช้งาน';
+function detectGesture(l){
+
+const thumb = l[4].y < l[3].y
+
+const index = l[8].y < l[6].y
+const middle = l[12].y < l[10].y
+const ring = l[16].y < l[14].y
+const pinky = l[20].y < l[18].y
+
+if(thumb && !index && !middle) return "thumb"
+
+const okDist = Math.hypot(
+l[4].x-l[8].x,
+l[4].y-l[8].y
+)
+
+if(okDist < 0.04) return "ok"
+
+if(index && middle && ring && pinky)
+return "hand"
+
+return null
+
+}
+
+function updateUI(){
+
+document.getElementById("v1").innerText=votes.thumb
+document.getElementById("v2").innerText=votes.ok
+document.getElementById("v3").innerText=votes.hand
+
+}
+
+const camera = new Camera(video,{
+onFrame: async()=>{
+await hands.send({image:video})
+},
+width:720,
+height:540
+})
+
+camera.start()
+
 </script>
+
 </body>
 </html>
